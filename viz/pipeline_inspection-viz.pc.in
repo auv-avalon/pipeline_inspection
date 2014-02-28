@@ -1,0 +1,12 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=@CMAKE_INSTALL_PREFIX@
+libdir=${prefix}/lib
+includedir=${prefix}/include
+
+Name: pipeline_inspection-viz
+Description: vizKit plugin for the pipeline_inspection library
+Requires: pipeline_inspection @PKGCONFIG_DEPS@
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lpipeline_inspection-viz
+Cflags: -I${includedir}
+
