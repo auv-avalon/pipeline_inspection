@@ -15,6 +15,7 @@ namespace pipeline_inspection{
 	struct Line{
 	  base::Vector3d p; //Startpoint of the line
 	  base::Vector3d direction; //Direction of the line -> this should be a unit vector
+	  double gradient;
 	};
   
 	struct Circle{

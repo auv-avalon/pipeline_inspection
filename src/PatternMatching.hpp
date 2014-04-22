@@ -18,6 +18,7 @@ namespace pipeline_inspection{
 	  double pipe_center;
 	  double pipe_radius_v;
           double pipe_radius_h;
+          double line_gradient;
 	};
         
         struct Boundary{
@@ -25,6 +26,7 @@ namespace pipeline_inspection{
           double maxY;
           double minX;
           double maxX;
+          double maxRad;
         };	
   
 	class PatternMatching

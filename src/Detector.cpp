@@ -10,6 +10,8 @@ namespace pipeline_inspection
     calib.laserNorm2Cam = c.cameraOrientation * c.laserNorm; //TODO inverse???
     
     pipeBuffer.resize(calib.buffer_size);
+    filteredPipeBuffer.resize(calib.buffer_size);
+    statusBuffer.resize(calib.buffer_size);
     matcher.init(calib);
   }
   
@@ -85,13 +87,15 @@ namespace pipeline_inspection
     
     if(pipePoints.size() > 0){
       
-      min = pipePoints.begin()->z();
+      filterPoints(pipePoints, filteredPipePoints, pipe);
+      
+      min = filteredPipePoints.begin()->z();
       max = min;
       
-      double laser_min = pipePoints.begin()->y();
+      double laser_min = filteredPipePoints.begin()->y();
       double laser_max = laser_min;
       
-      for(std::vector<base::Vector3d>::iterator it = pipePoints.begin(); it != pipePoints.end(); it++){
+      for(std::vector<base::Vector3d>::iterator it = filteredPipePoints.begin(); it != filteredPipePoints.end(); it++){
 	
 	if(it->z() < min)
 	  min = it->z();
@@ -109,12 +113,12 @@ namespace pipeline_inspection
       
       double height_diff = max - min;
       double laser_diff = laser_max - laser_min;
-      
+                  
       double pipe_begin = laser_max;
       double pipe_end = laser_min;
       
       //Search for the begin and end of pipe;
-      for(std::vector<base::Vector3d>::iterator it = pipePoints.begin(); it != pipePoints.end(); it++){
+      for(std::vector<base::Vector3d>::iterator it = filteredPipePoints.begin(); it != filteredPipePoints.end(); it++){
 	
         if(calib.matcher_pipe_up){ // If pipe is a maximum, search for begin and end of maximum
           if(it->z() > min + (0.5 * height_diff) && it->y() < pipe_begin)
@@ -144,21 +148,29 @@ namespace pipeline_inspection
       //p.pipe_radius = ((pipe_end - pipe_begin) + height_diff) / 2.0; //Average between pipe height and pipe width
       p.pipe_radius_h = (pipe_end - pipe_begin);
       p.pipe_radius_v = height_diff;
-      
-      if(pipePoints.size() > 0){
+                 
+      if(pipePoints.size() > 0){        
+        
         pipeBuffer.push_back( std::pair<std::vector<base::Vector3d>, base::samples::RigidBodyState>(pipePoints, pos) );
+        filteredPipeBuffer.push_back( std::pair<std::vector<base::Vector3d>, base::samples::RigidBodyState>(filteredPipePoints, pos) );
+        
         Boundary b;
         b.minX = laser_min;
         b.maxX = laser_max;
         b.minY = min;
         b.maxY = max;
-        Pattern pattern = matcher.match(pipeBuffer, p, b);      
+        b.maxRad = calib.pipe_radius * (1.0 + calib.pipe_tolerance);
+        Pattern pattern = matcher.match(filteredPipeBuffer, p, b);      
           
         status.pipe_width = pattern.pipe_radius_h;
         status.pipe_height = pattern.pipe_radius_v;
         status.pipe_radius = (pattern.pipe_radius_h + pattern.pipe_radius_v) / 2.0 ;
         status.pipe_center = pattern.pipe_center;
         status.laser_height = pattern.line_height;
+        status.laser_gradient = pattern.line_gradient;
+        
+        status.state = ratePipe(pattern);
+        statusBuffer.push_back(status);
       }
       
     }
@@ -169,7 +181,10 @@ namespace pipeline_inspection
   double Detector::camera2LaserFrame(const base::Vector3d &pointC, base::Vector3d &pointL){
     
     //convert point from cameraframe to worldframe
-    base::Vector3d pointW = (calib.cameraOrientation * pointC) + calib.cameraPos;    
+    base::Vector3d pointW = (calib.cameraOrientation * pointC) + calib.cameraPos;
+    
+    if(calib.invert_z)
+      pointW.z() = -pointW.z();
     
     //Projekt camerapoint to laserframe
     //http://de.wikipedia.org/wiki/Orthogonalprojektion#Projektion_auf_eine_Ebene
@@ -189,6 +204,7 @@ namespace pipeline_inspection
     
     pointV = pointL;
     pointV -= ( ( (pointL - verticalPos).dot(verticalPos) ) / verticalNorm.dot(verticalNorm) ) * verticalNorm;
+    pointV.x() = 0.0;
     
   }
   
@@ -199,5 +215,125 @@ namespace pipeline_inspection
   double Detector::getProjectionSSE(){
     return projectionSSE;
   }
+  
+  
+  base::samples::Pointcloud Detector::getPointcloud(bool relative_map){
+    
+    base::samples::Pointcloud cloud;
+       
+    if(!pipeBuffer.empty()){
+     
+      base::Vector3d first_pos;
+      
+      if(relative_map){
+        first_pos = pipeBuffer.begin()->second.position;
+      }
+      else{
+        first_pos = base::Vector3d(0.0, 0.0, 0.0);
+      }
+      
+      boost::circular_buffer<InspectionStatus>::iterator it_s = statusBuffer.begin();
+      
+      for(laserInformation::iterator it = pipeBuffer.begin(); it != pipeBuffer.end() && it_s != statusBuffer.end(); it++, it_s++){
+        std::vector<base::Vector3d>& ps = it->first;
+        base::samples::RigidBodyState& rbs = it->second;
+        
+        double pipe_begin = it_s->pipe_center - it_s->pipe_width;
+        double pipe_end = it_s->pipe_center + it_s->pipe_width;
+        
+        for(std::vector<base::Vector3d>::iterator jt = ps.begin(); jt != ps.end(); jt++){
+          base::Vector3d p = (rbs.orientation * *jt) + (rbs.position - first_pos);
+          cloud.points.push_back(p);
+          
+          if( jt->y() < pipe_begin || jt-> y() > pipe_end)
+            cloud.colors.push_back(calib.ground_color);          
+          else if(it_s->state == UNDERFLOODING)
+            cloud.colors.push_back(calib.underflooding_color);
+          else if(it_s->state == OVERFLOODING)
+            cloud.colors.push_back(calib.overflooding_color);
+          else
+            cloud.colors.push_back(calib.pipe_color);
+          
+          
+        }       
+      }
+     
+     cloud.time = pipeBuffer.back().second.time;
+     
+    }
+     
+    return cloud;
+  }
+  
+  PipelineState Detector::ratePipe(Pattern p){
+    double min_radius = calib.pipe_radius * (1.0 - calib.pipe_tolerance);
+    double max_radius = calib.pipe_radius * (1.0 + calib.pipe_tolerance);
+    
+    if(p.pipe_radius_v > max_radius) //Pipe is to high
+      return UNDERFLOODING;
+    
+    if(p.pipe_radius_v < min_radius) //Pipe is to low
+      return OVERFLOODING;
+    
+    if(p.pipe_radius_h > max_radius && p.pipe_radius_v > min_radius) //Pipe width is to big, heigth is normal
+      return OVERFLOODING;
+    
+    if(p.pipe_radius_v > min_radius && p.pipe_radius_v < max_radius) //Pipe is okay
+      return NORMAL;
+    
+    return NO_PIPE;    
+    
+  }
+  
+  void Detector::filterPoints(const std::vector<base::Vector3d> &src, std::vector<base::Vector3d> &dst, controlData::Pipeline pipe){
+    dst.clear();    
+    
+    double left_border, right_border;
+    
+    if(pipe.angle > calib.max_pipe_angle || pipe.angle < - calib.max_pipe_angle
+        || pipe.confidence < calib.min_pipe_confidence)
+    {
+      
+      if(src.size() > 0){
+        
+        double min = src.begin()->y();
+        double max = min;
+        
+        for(std::vector<base::Vector3d>::const_iterator it = src.begin(); it != src.end(); it++){
+          
+          if(it->y() < min)
+            min = it->y();
+          
+          if(it->y() > max)
+            max = it->y();
+          
+        }
+      
+        double span = max - min;
+        left_border = min + (span * calib.left_laser_boundary);
+        right_border = max - (span * calib.right_laser_boundary);  
+              
+      }      
+      
+    }
+    else{
+      left_border = pipe.y_m - (pipe.width_m * 2.0);
+      right_border = pipe.y_m + (pipe.width_m * 2.0);      
+    }
+    
+    
+    for(std::vector<base::Vector3d>::const_iterator it = src.begin(); it != src.end(); it++){
+      
+      if(it->y() > left_border && it->y() < right_border){       
+        dst.push_back(*it); 
+      }  
+           
+      
+    }
+    
+  }
+  
+  
+  
+}//end namespace
 
-}

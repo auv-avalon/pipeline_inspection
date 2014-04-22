@@ -8,8 +8,14 @@ namespace pipeline_inspection
     return std::fabs( ( (line.p - point) - ( (line.p - point).dot(line.direction) * line.direction ) ).norm() );    
   }*/
   
+  /*
   double dist_line2point(const Line &line, const base::Vector3d &point){
     return std::fabs( line.p.z() - point.z() );
+  }*/
+  
+  double dist_line2point(const Line &line, const base::Vector3d &point){
+    
+    return std::fabs( (line.p.z() + (line.p.y() * line.gradient)) - point.z() );
   }
   
   

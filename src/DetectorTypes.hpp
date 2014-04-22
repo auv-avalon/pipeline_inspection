@@ -38,6 +38,7 @@ namespace pipeline_inspection {
     double pipe_radius;
     double laser_width;
     double laser_height;
+    double laser_gradient;
     double matching_error; // SSE between projected points and calculated pattern
     double projection_error; //SSE between worldpoints and laserframe
     
@@ -48,6 +49,12 @@ namespace pipeline_inspection {
     base::Vector3d laserPos;
     base::Vector3d laserNorm;
     base::Quaterniond cameraOrientation;
+    bool invert_z;
+    
+    double left_laser_boundary;
+    double right_laser_boundary;
+    double max_pipe_angle;
+    double min_pipe_confidence;
     
     int buffer_size;
     nlopt::algorithm min_algo;
@@ -61,6 +68,19 @@ namespace pipeline_inspection {
     base::Vector3d laserNorm2Cam;
     base::Vector3d verticalPos2Laser;
     base::Vector3d verticalNorm2Laser;
+    
+    double pipe_radius;
+    double pipe_tolerance;
+    
+    //Visualization params
+    base::Vector4d pipe_color;
+    base::Vector4d ground_color;
+    base::Vector4d overflooding_color;
+    base::Vector4d underflooding_color;
+    
+    
+    
+    
   };
 
   

@@ -17,26 +17,34 @@ namespace pipeline_inspection
     point_buffer = pipeBuffer;
     
     
-    nlopt::opt opt(calib.min_algo, 4);
+    nlopt::opt opt(calib.min_algo, 5);
     
-    std::vector<double> lower_bounds(4);
+    double gradient = (b.maxY - b.minY) / (b.maxX - b.minX);
+    
+    std::vector<double> lower_bounds(5);
     lower_bounds[0] = b.minY ;
     lower_bounds[1] = b.minX ;
     lower_bounds[2] = 0.0;
     lower_bounds[3] = 0.0;
+    lower_bounds[4] = - gradient;
     opt.set_lower_bounds(lower_bounds);
     
-    std::vector<double> upper_bounds(4);
+    std::vector<double> upper_bounds(5);
     upper_bounds[0] = b.maxY;
     upper_bounds[1] = b.maxX;
     
+    upper_bounds[2] = b.maxRad;
+    upper_bounds[3] = b.maxY - b.minY;
+    upper_bounds[4] = gradient;
+    
+    /*
     if( b.maxX - b.minX > b.maxY - b.minY){
       upper_bounds[2] = b.maxX - b.minX;
       upper_bounds[3] = upper_bounds[2];
     }else{
       upper_bounds[2] = b.maxY - b.minY;
       upper_bounds[3] = upper_bounds[2];
-    }  
+    } */ 
 
     opt.set_upper_bounds(upper_bounds);
     
@@ -46,12 +54,23 @@ namespace pipeline_inspection
     opt.set_ftol_rel(calib.matcher_value_tolerance);
     opt.set_maxeval(calib.matcher_iterations);
    
-    std::vector<double> x(4);
+    std::vector<double> x(5);
     x[0] = p.line_height;
     x[1] = p.pipe_center;
     x[2] = p.pipe_radius_h;
     x[3] = p.pipe_radius_v;
+    x[4] = 0.0;
     double minf;
+    
+    for(int i = 0; i <5; i++){
+      
+      if(x[i] > upper_bounds[i])
+        x[i] = upper_bounds[i];
+      
+      if(x[i] < lower_bounds[i])
+        x[i] = lower_bounds[i];
+      
+    }    
     
     std::cout << "Minimizer start" << std::endl;
     nlopt::result result = opt.optimize(x, minf);
@@ -62,11 +81,13 @@ namespace pipeline_inspection
     std::cout << "Line height: " << x[0] << std::endl;
     std::cout << "Pipe radius_h: " << x[2] << std::endl;
     std::cout << "Pipe radius_v: " << x[3] << std::endl;
+    std::cout << "Pipe gradient: " << x[4] << std::endl;
     
     p.line_height = x[0];
     p.pipe_center = x[1];
     p.pipe_radius_h = x[2];
     p.pipe_radius_v = x[3];
+    p.line_gradient = x[4];
     
     return p;
   } 
@@ -81,6 +102,7 @@ namespace pipeline_inspection
             grad[1] = 0.0;
             grad[2] = 0.0;
             grad[3] = 0.0;
+            grad[4] = 0.0;
       }
       
       Pattern p;
@@ -88,6 +110,7 @@ namespace pipeline_inspection
       p.pipe_center = x[1];
       p.pipe_radius_h = x[2];
       p.pipe_radius_v = x[3];
+      p.line_gradient = x[4];
       
       return SSE(p, point_buffer->begin()->first, pm->calib);
   }  
@@ -98,13 +121,14 @@ namespace pipeline_inspection
    Line line;
    line.p = base::Vector3d(0.0, 0.0, p.line_height);
    line.direction = base::Vector3d(0.0, 1.0, 0.0);
+   line.gradient = p.line_gradient;
    
 //    Circle circle;
 //    circle.p = base::Vector3d(0.0, p.pipe_center, p.line_height);
 //    circle.radius = p.pipe_radius;
    
    Ellipse ellipse;
-   ellipse.p = base::Vector3d(0.0, p.pipe_center, p.line_height);
+   ellipse.p = base::Vector3d(0.0, p.pipe_center, p.line_height + (p.pipe_center * p.line_gradient) );
    ellipse.radius_v = p.pipe_radius_v;
    ellipse.radius_h = p.pipe_radius_h;
    

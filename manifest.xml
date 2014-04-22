@@ -18,4 +18,5 @@
   <depend package="image_processing/offshore_pipeline_detector"/>
   <depend package="gui/vizkit3d" />
   <rosdep name="osg" />
+  <tags>needs_opt</tags>
 </package>
