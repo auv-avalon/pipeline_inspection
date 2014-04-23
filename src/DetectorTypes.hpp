@@ -40,6 +40,7 @@ namespace pipeline_inspection {
     double laser_height;
     double laser_gradient;
     double matching_error; // SSE between projected points and calculated pattern
+    double matching_variance; // Variance between points and clalculated pattern
     double projection_error; //SSE between worldpoints and laserframe
     
   };
@@ -58,25 +59,34 @@ namespace pipeline_inspection {
     
     int buffer_size;
     nlopt::algorithm min_algo;
+    nlopt::algorithm min_algo2;
+    bool use_second_minimizer;
     double matcher_parameter_tolerance;
     double matcher_value_tolerance;
     int matcher_iterations;
     bool matcher_pipe_up;
-    
+    double matcher_variance_threshold;
+       
     //To be calculated by Detector-object
     base::Vector3d laserPos2Cam;
     base::Vector3d laserNorm2Cam;
     base::Vector3d verticalPos2Laser;
     base::Vector3d verticalNorm2Laser;
     
-    double pipe_radius;
-    double pipe_tolerance;
+    double pipe_radius_h;
+    double pipe_radius_v;
+    double pipe_tolerance_h;
+    double pipe_tolerance_v;
+    double pipe_min_radius;
     
     //Visualization params
     base::Vector4d pipe_color;
     base::Vector4d ground_color;
     base::Vector4d overflooding_color;
     base::Vector4d underflooding_color;
+    double movement_factor;
+    double z_offset;
+    
     
     
     

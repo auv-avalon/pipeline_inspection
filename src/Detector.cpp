@@ -85,10 +85,13 @@ namespace pipeline_inspection
     //Search for minimum and maximum in points
     double min,max;
     
-    if(pipePoints.size() > 0){
-      
-      filterPoints(pipePoints, filteredPipePoints, pipe);
-      
+    filterPoints(pipePoints, filteredPipePoints, pipe);
+    
+    pipeBuffer.push_back( std::pair<std::vector<base::Vector3d>, base::samples::RigidBodyState>(pipePoints, pos) );
+    filteredPipeBuffer.push_back( std::pair<std::vector<base::Vector3d>, base::samples::RigidBodyState>(filteredPipePoints, pos) );    
+    
+    if(filteredPipePoints.size() > 0){
+                  
       min = filteredPipePoints.begin()->z();
       max = min;
       
@@ -151,16 +154,15 @@ namespace pipeline_inspection
                  
       if(pipePoints.size() > 0){        
         
-        pipeBuffer.push_back( std::pair<std::vector<base::Vector3d>, base::samples::RigidBodyState>(pipePoints, pos) );
-        filteredPipeBuffer.push_back( std::pair<std::vector<base::Vector3d>, base::samples::RigidBodyState>(filteredPipePoints, pos) );
-        
         Boundary b;
         b.minX = laser_min;
         b.maxX = laser_max;
         b.minY = min;
         b.maxY = max;
-        b.maxRad = calib.pipe_radius * (1.0 + calib.pipe_tolerance);
-        Pattern pattern = matcher.match(filteredPipeBuffer, p, b);      
+        b.maxRad = calib.pipe_radius_h * (1.0 + (calib.pipe_tolerance_h * 2.0) );
+        
+        double error;
+        Pattern pattern = matcher.match(filteredPipePoints, p, b, error);      
           
         status.pipe_width = pattern.pipe_radius_h;
         status.pipe_height = pattern.pipe_radius_v;
@@ -168,13 +170,25 @@ namespace pipeline_inspection
         status.pipe_center = pattern.pipe_center;
         status.laser_height = pattern.line_height;
         status.laser_gradient = pattern.line_gradient;
-        
+        status.matching_error = error;
+                
+        if(filteredPipePoints.size() > 0){        
+          status.matching_variance = error/filteredPipePoints.size();
+        }
+        else{
+          status.matching_variance = 0.0;
+        }
+          
+        pattern.var = status.matching_variance;          
+          
         status.state = ratePipe(pattern);
-        statusBuffer.push_back(status);
       }
       
     }
     status.projection_error = projectionSSE;
+    statusBuffer.push_back(status);
+    
+    
     return status;
   }
   
@@ -182,7 +196,7 @@ namespace pipeline_inspection
     
     //convert point from cameraframe to worldframe
     base::Vector3d pointW = (calib.cameraOrientation * pointC) + calib.cameraPos;
-    
+        
     if(calib.invert_z)
       pointW.z() = -pointW.z();
     
@@ -205,6 +219,7 @@ namespace pipeline_inspection
     pointV = pointL;
     pointV -= ( ( (pointL - verticalPos).dot(verticalPos) ) / verticalNorm.dot(verticalNorm) ) * verticalNorm;
     pointV.x() = 0.0;
+    pointV.y() *= -1.0; //HACK invert y
     
   }
   
@@ -240,9 +255,17 @@ namespace pipeline_inspection
         
         double pipe_begin = it_s->pipe_center - it_s->pipe_width;
         double pipe_end = it_s->pipe_center + it_s->pipe_width;
-        
+
         for(std::vector<base::Vector3d>::iterator jt = ps.begin(); jt != ps.end(); jt++){
-          base::Vector3d p = (rbs.orientation * *jt) + (rbs.position - first_pos);
+
+          base::Vector3d pos = rbs.position - first_pos;
+          pos.x() *= calib.movement_factor;
+          pos.y() *= calib.movement_factor;
+          pos.z() = calib.z_offset;
+          base::Vector3d point = *jt;
+          
+          
+          base::Vector3d p = (rbs.orientation * point) + pos;
           cloud.points.push_back(p);
           
           if( jt->y() < pipe_begin || jt-> y() > pipe_end)
@@ -251,9 +274,10 @@ namespace pipeline_inspection
             cloud.colors.push_back(calib.underflooding_color);
           else if(it_s->state == OVERFLOODING)
             cloud.colors.push_back(calib.overflooding_color);
-          else
+          else if(it_s->state == NORMAL)
             cloud.colors.push_back(calib.pipe_color);
-          
+          else if(it_s->state == NO_PIPE)
+            cloud.colors.push_back(calib.ground_color);          
           
         }       
       }
@@ -266,19 +290,28 @@ namespace pipeline_inspection
   }
   
   PipelineState Detector::ratePipe(Pattern p){
-    double min_radius = calib.pipe_radius * (1.0 - calib.pipe_tolerance);
-    double max_radius = calib.pipe_radius * (1.0 + calib.pipe_tolerance);
     
-    if(p.pipe_radius_v > max_radius) //Pipe is to high
+    if(p.var > calib.matcher_variance_threshold)
+      return NO_PIPE;
+    
+    double min_radius_h = calib.pipe_radius_h * (1.0 - calib.pipe_tolerance_h);
+    double max_radius_h = calib.pipe_radius_h * (1.0 + calib.pipe_tolerance_h);
+    double min_radius_v = calib.pipe_radius_v * (1.0 - calib.pipe_tolerance_v);
+    double max_radius_v = calib.pipe_radius_v * (1.0 + calib.pipe_tolerance_v);
+    
+    if(p.pipe_radius_h > max_radius_h || p.pipe_radius_v < calib.pipe_min_radius) //Pipe width to big or pipe to low -> detect nothing
+      return NO_PIPE;
+         
+    if(p.pipe_radius_v > max_radius_v) //Pipe is to high
       return UNDERFLOODING;
     
-    if(p.pipe_radius_v < min_radius) //Pipe is to low
+    if(p.pipe_radius_v < min_radius_v) //Pipe is to low
       return OVERFLOODING;
     
-    if(p.pipe_radius_h > max_radius && p.pipe_radius_v > min_radius) //Pipe width is to big, heigth is normal
-      return OVERFLOODING;
+    //if(p.pipe_radius_h > max_radius && p.pipe_radius_v > min_radius) //Pipe width is to big, heigth is normal
+    //  return OVERFLOODING;
     
-    if(p.pipe_radius_v > min_radius && p.pipe_radius_v < max_radius) //Pipe is okay
+    if(p.pipe_radius_h > min_radius_h && p.pipe_radius_h < max_radius_h) //Pipe is okay
       return NORMAL;
     
     return NO_PIPE;    
@@ -288,7 +321,8 @@ namespace pipeline_inspection
   void Detector::filterPoints(const std::vector<base::Vector3d> &src, std::vector<base::Vector3d> &dst, controlData::Pipeline pipe){
     dst.clear();    
     
-    double left_border, right_border;
+    double left_border = 0.0;
+    double right_border = 0.0;
     
     if(pipe.angle > calib.max_pipe_angle || pipe.angle < - calib.max_pipe_angle
         || pipe.confidence < calib.min_pipe_confidence)
@@ -312,7 +346,9 @@ namespace pipeline_inspection
         double span = max - min;
         left_border = min + (span * calib.left_laser_boundary);
         right_border = max - (span * calib.right_laser_boundary);  
-              
+        
+        return; //TODO do nothing, if no pipe avaialble?
+        
       }      
       
     }

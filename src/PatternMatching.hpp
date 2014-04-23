@@ -19,6 +19,8 @@ namespace pipeline_inspection{
 	  double pipe_radius_v;
           double pipe_radius_h;
           double line_gradient;
+          
+          double var;
 	};
         
         struct Boundary{
@@ -33,12 +35,12 @@ namespace pipeline_inspection{
 	{
 	public:
 	  void init( const DetectorCalib &calib);
-	  Pattern match(laserInformation &pipeBuffer , Pattern p, Boundary b);
+	  Pattern match(std::vector<base::Vector3d> pointBuffer , Pattern p, Boundary b, double &error);
 	  
-	  double SSE(Pattern p) const;  
+	  //double SSE(Pattern p) const;  
 	  
 	  std::vector<base::Vector3d> points;	
-	  laserInformation point_buffer;
+	  //laserInformation point_buffer;
 	  DetectorCalib calib;
 	  
 //	private:

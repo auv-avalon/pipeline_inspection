@@ -7,14 +7,14 @@ namespace pipeline_inspection
     this->calib = calib;
   }
   
-  Pattern PatternMatching::match(laserInformation &pipeBuffer , Pattern p, Boundary b){
+  Pattern PatternMatching::match(std::vector<base::Vector3d> pointBuffer , Pattern p, Boundary b, double &error){
     std::cout << "Matching function" << std::endl;
-    if(pipeBuffer.empty() || pipeBuffer.begin()->first.size() == 0){
+    if(pointBuffer.empty()){
       std::cout << "buffer empty" << std::endl;
       return p;
     }
     std::cout << "Buffer test" << std::endl;
-    point_buffer = pipeBuffer;
+    points = pointBuffer;
     
     
     nlopt::opt opt(calib.min_algo, 5);
@@ -74,6 +74,40 @@ namespace pipeline_inspection
     
     std::cout << "Minimizer start" << std::endl;
     nlopt::result result = opt.optimize(x, minf);
+    std::cout << "Second minimizer" << std::endl;
+    
+    if(calib.use_second_minimizer){
+      
+      std::cout << "1" << std::endl;
+      nlopt::opt opt2(calib.min_algo2, 5);
+      std::cout << "2"<< std::endl;
+      opt2.set_lower_bounds(lower_bounds);
+      std::cout << "3" << std::endl;
+      opt2.set_upper_bounds(upper_bounds);
+      std::cout << "4" << std::endl;
+      
+      opt2.set_min_objective(error_func, (void*) this);
+      std::cout << "5" << std::endl;
+      opt2.set_xtol_rel(calib.matcher_parameter_tolerance);
+      std::cout << "6" << std::endl;
+      opt2.set_ftol_rel(calib.matcher_value_tolerance);
+      std::cout << "7" << std::endl;
+      opt2.set_maxeval(calib.matcher_iterations);
+      
+      for(int i = 0; i <5; i++){
+        
+        if(x[i] > upper_bounds[i])
+          x[i] = upper_bounds[i];
+        
+        if(x[i] < lower_bounds[i])
+          x[i] = lower_bounds[i];
+        
+      }      
+      std::cout << "8" << std::endl;
+      result = opt2.optimize(x, minf);      
+    }      
+      
+    
     std::cout << "Minimizer stop" << std::endl;
     std::cout << "Boundary: " << std::endl;
     std::cout << "X: " << b.minX << " " << b.maxX << std::endl;
@@ -89,14 +123,17 @@ namespace pipeline_inspection
     p.pipe_radius_v = x[3];
     p.line_gradient = x[4];
     
+    error = SSE(p, pointBuffer, calib);
+    
     return p;
   } 
   
   double error_func(const std::vector<double> &x, std::vector<double> &grad, void *data)
   {
       PatternMatching *pm = reinterpret_cast<PatternMatching*>(data);
-      laserInformation *point_buffer = &(pm->point_buffer);  
-      
+      //laserInformation *point_buffer = &(pm->point_buffer);  
+      std::vector<base::Vector3d> *point_buffer = &(pm->points);
+            
       if (!grad.empty()) {
             grad[0] = 0.0;
             grad[1] = 0.0;
@@ -112,7 +149,7 @@ namespace pipeline_inspection
       p.pipe_radius_v = x[3];
       p.line_gradient = x[4];
       
-      return SSE(p, point_buffer->begin()->first, pm->calib);
+      return SSE(p, *point_buffer, pm->calib);
   }  
   
   
