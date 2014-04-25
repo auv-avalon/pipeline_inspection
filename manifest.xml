@@ -17,6 +17,7 @@
   <depend package="base/types" />
   <depend package="image_processing/offshore_pipeline_detector"/>
   <depend package="gui/vizkit3d" />
+  <depend package="avalon/nlopt" />
   <rosdep name="osg" />
   <tags>needs_opt</tags>
 </package>
