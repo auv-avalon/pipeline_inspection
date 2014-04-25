@@ -45,7 +45,7 @@ namespace pipeline_inspection
 	angle += scan.angular_resolution;
        
     }
-     std::cout << "Max range: " << max_range << std::endl;
+     
      return inspect(points, pipe, pos);    
   }
   
@@ -241,7 +241,12 @@ namespace pipeline_inspection
       base::Vector3d first_pos;
       
       if(relative_map){
-        first_pos = pipeBuffer.begin()->second.position;
+        //first_pos = pipeBuffer.begin()->second.position; //Align map to first sample
+          
+          
+        //Align map to middle sample 
+        first_pos = pipeBuffer[(int) (pipeBuffer.size() / 2.0)].second.position;        
+        
       }
       else{
         first_pos = base::Vector3d(0.0, 0.0, 0.0);
@@ -262,8 +267,7 @@ namespace pipeline_inspection
           pos.x() *= calib.movement_factor;
           pos.y() *= calib.movement_factor;
           pos.z() = calib.z_offset;
-          base::Vector3d point = *jt;
-          
+          base::Vector3d point = *jt;          
           
           base::Vector3d p = (rbs.orientation * point) + pos;
           cloud.points.push_back(p);

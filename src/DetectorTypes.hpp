@@ -87,7 +87,7 @@ namespace pipeline_inspection {
     double movement_factor;
     double z_offset;
     
-    
+    bool debug;
     
     
     

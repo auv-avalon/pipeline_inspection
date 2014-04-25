@@ -1,0 +1,4 @@
+entpacken
+./configure --enable-shared
+make
+make install

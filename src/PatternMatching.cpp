@@ -8,12 +8,12 @@ namespace pipeline_inspection
   }
   
   Pattern PatternMatching::match(std::vector<base::Vector3d> pointBuffer , Pattern p, Boundary b, double &error){
-    std::cout << "Matching function" << std::endl;
+
     if(pointBuffer.empty()){
       std::cout << "buffer empty" << std::endl;
       return p;
     }
-    std::cout << "Buffer test" << std::endl;
+
     points = pointBuffer;
     
     
@@ -72,26 +72,22 @@ namespace pipeline_inspection
       
     }    
     
-    std::cout << "Minimizer start" << std::endl;
+    if(calib.debug)
+      std::cout << "Minimizer start" << std::endl;
+    
     nlopt::result result = opt.optimize(x, minf);
-    std::cout << "Second minimizer" << std::endl;
     
     if(calib.use_second_minimizer){
       
-      std::cout << "1" << std::endl;
+
       nlopt::opt opt2(calib.min_algo2, 5);
-      std::cout << "2"<< std::endl;
       opt2.set_lower_bounds(lower_bounds);
-      std::cout << "3" << std::endl;
       opt2.set_upper_bounds(upper_bounds);
-      std::cout << "4" << std::endl;
       
       opt2.set_min_objective(error_func, (void*) this);
-      std::cout << "5" << std::endl;
+
       opt2.set_xtol_rel(calib.matcher_parameter_tolerance);
-      std::cout << "6" << std::endl;
       opt2.set_ftol_rel(calib.matcher_value_tolerance);
-      std::cout << "7" << std::endl;
       opt2.set_maxeval(calib.matcher_iterations);
       
       for(int i = 0; i <5; i++){
@@ -103,19 +99,19 @@ namespace pipeline_inspection
           x[i] = lower_bounds[i];
         
       }      
-      std::cout << "8" << std::endl;
       result = opt2.optimize(x, minf);      
     }      
       
-    
-    std::cout << "Minimizer stop" << std::endl;
-    std::cout << "Boundary: " << std::endl;
-    std::cout << "X: " << b.minX << " " << b.maxX << std::endl;
-    std::cout << "Y: " << b.minY << " " << b.maxY << std::endl;
-    std::cout << "Line height: " << x[0] << std::endl;
-    std::cout << "Pipe radius_h: " << x[2] << std::endl;
-    std::cout << "Pipe radius_v: " << x[3] << std::endl;
-    std::cout << "Pipe gradient: " << x[4] << std::endl;
+    if(calib.debug){
+      std::cout << "Minimizer stop" << std::endl;
+      std::cout << "Boundary: " << std::endl;
+      std::cout << "X: " << b.minX << " " << b.maxX << std::endl;
+      std::cout << "Y: " << b.minY << " " << b.maxY << std::endl;
+      std::cout << "Line height: " << x[0] << std::endl;
+      std::cout << "Pipe radius_h: " << x[2] << std::endl;
+      std::cout << "Pipe radius_v: " << x[3] << std::endl;
+      std::cout << "Pipe gradient: " << x[4] << std::endl;
+    }
     
     p.line_height = x[0];
     p.pipe_center = x[1];
