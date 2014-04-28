@@ -273,7 +273,7 @@ namespace pipeline_inspection
           base::Vector3d p;
           
           if(calib.no_motion){
-            p = point + base::Vector3d(motion,0.0, calib.z_offset);
+            p = rbs.orientation * (point + base::Vector3d(motion,0.0, calib.z_offset)) ;
                         
           }
           else{
