@@ -88,6 +88,7 @@ namespace pipeline_inspection {
     double z_offset;
     
     bool debug;
+    bool no_motion;
     
     
     

@@ -253,6 +253,7 @@ namespace pipeline_inspection
       }
       
       boost::circular_buffer<InspectionStatus>::iterator it_s = statusBuffer.begin();
+      double motion = - (calib.buffer_size/40.0);
       
       for(laserInformation::iterator it = pipeBuffer.begin(); it != pipeBuffer.end() && it_s != statusBuffer.end(); it++, it_s++){
         std::vector<base::Vector3d>& ps = it->first;
@@ -260,7 +261,8 @@ namespace pipeline_inspection
         
         double pipe_begin = it_s->pipe_center - it_s->pipe_width;
         double pipe_end = it_s->pipe_center + it_s->pipe_width;
-
+        motion += 0.05;    
+        
         for(std::vector<base::Vector3d>::iterator jt = ps.begin(); jt != ps.end(); jt++){
 
           base::Vector3d pos = rbs.position - first_pos;
@@ -268,8 +270,16 @@ namespace pipeline_inspection
           pos.y() *= calib.movement_factor;
           pos.z() = calib.z_offset;
           base::Vector3d point = *jt;          
+          base::Vector3d p;
           
-          base::Vector3d p = (rbs.orientation * point) + pos;
+          if(calib.no_motion){
+            p = point + base::Vector3d(motion,0.0, calib.z_offset);
+                        
+          }
+          else{
+            p = (rbs.orientation * point) + pos;
+          }
+          
           cloud.points.push_back(p);
           
           if( jt->y() < pipe_begin || jt-> y() > pipe_end)
