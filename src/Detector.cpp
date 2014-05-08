@@ -1,4 +1,5 @@
 #include "Detector.hpp"
+#include <stdexcept>
 
 namespace pipeline_inspection
 {
@@ -162,8 +163,15 @@ namespace pipeline_inspection
         b.maxRad = calib.pipe_radius_h * (1.0 + (calib.pipe_tolerance_h * 2.0) );
         
         double error;
-        Pattern pattern = matcher.match(filteredPipePoints, p, b, error);      
-          
+	Pattern pattern;
+
+	try{
+        	pattern = matcher.match(filteredPipePoints, p, b, error);      
+	}
+	catch(std::runtime_error e){
+		std::cout << "exception in matcher" << std::endl;
+	} 
+
         status.pipe_width = pattern.pipe_radius_h;
         status.pipe_height = pattern.pipe_radius_v;
         status.pipe_radius = (pattern.pipe_radius_h + pattern.pipe_radius_v) / 2.0 ;
