@@ -89,6 +89,7 @@ namespace pipeline_inspection {
     
     bool debug;
     bool no_motion;
+    bool use_velocity;
     
     
     

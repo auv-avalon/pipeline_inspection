@@ -244,9 +244,31 @@ namespace pipeline_inspection
         //first_pos = pipeBuffer.begin()->second.position; //Align map to first sample
           
           
-        //Align map to middle sample 
-        first_pos = pipeBuffer[(int) (pipeBuffer.size() / 2.0)].second.position;        
+        //Align map to middle sample
         
+        if(calib.use_velocity){
+          
+          //Calculate trajectory and middle the position
+          
+          base::Vector3d vel_pos(0.0,0.0, 0.0);
+          base::Time lastTime = pipeBuffer.begin()->second.time;
+          
+          for(laserInformation::iterator it = pipeBuffer.begin(); it != pipeBuffer.end(); it++){
+             base::samples::RigidBodyState& rbs = it->second;
+             
+             vel_pos += ( rbs.orientation * base::Vector3d(rbs.velocity[0] * calib.movement_factor, rbs.velocity[1] * calib.movement_factor, 0.0))
+                    * (rbs.time.toSeconds() - lastTime.toSeconds() );
+             lastTime = rbs.time;
+          } 
+          
+          first_pos = vel_pos * 0.5;
+          
+        }else{
+          
+          //Take the middle position
+          first_pos = pipeBuffer[(int) (pipeBuffer.size() / 2.0)].second.position;        
+        }
+          
       }
       else{
         first_pos = base::Vector3d(0.0, 0.0, 0.0);
@@ -254,6 +276,10 @@ namespace pipeline_inspection
       
       boost::circular_buffer<InspectionStatus>::iterator it_s = statusBuffer.begin();
       double motion = - (calib.buffer_size/40.0);
+      base::samples::RigidBodyState lastRbs = pipeBuffer.begin()->second;
+      base::Vector3d lastPos = base::Vector3d(0.0, 0.0, calib.z_offset);
+      base::Vector3d vel;
+      
       
       for(laserInformation::iterator it = pipeBuffer.begin(); it != pipeBuffer.end() && it_s != statusBuffer.end(); it++, it_s++){
         std::vector<base::Vector3d>& ps = it->first;
@@ -261,14 +287,23 @@ namespace pipeline_inspection
         
         double pipe_begin = it_s->pipe_center - it_s->pipe_width;
         double pipe_end = it_s->pipe_center + it_s->pipe_width;
-        motion += 0.05;    
+        motion += 0.05;
+        
+        base::Vector3d pos = rbs.position - first_pos;
+        pos.x() *= calib.movement_factor;
+        pos.y() *= calib.movement_factor;
+        pos.z() = calib.z_offset;        
+        
+        if(calib.use_velocity){
+          vel = base::Vector3d(rbs.velocity[0] * calib.movement_factor, rbs.velocity[1] * calib.movement_factor, 0.0);
+          lastPos = lastPos + ( (rbs.orientation * vel) * (rbs.time.toSeconds() - lastRbs.time.toSeconds()) );
+          lastRbs = rbs;
+          pos = lastPos - first_pos;
+        }
         
         for(std::vector<base::Vector3d>::iterator jt = ps.begin(); jt != ps.end(); jt++){
 
-          base::Vector3d pos = rbs.position - first_pos;
-          pos.x() *= calib.movement_factor;
-          pos.y() *= calib.movement_factor;
-          pos.z() = calib.z_offset;
+
           base::Vector3d point = *jt;          
           base::Vector3d p;
           

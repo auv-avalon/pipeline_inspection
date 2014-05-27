@@ -8,7 +8,9 @@ namespace pipeline_inspection
   }
   
   Pattern PatternMatching::match(std::vector<base::Vector3d> pointBuffer , Pattern p, Boundary b, double &error){
-
+    
+    try{
+    
     if(pointBuffer.empty()){
       std::cout << "buffer empty" << std::endl;
       return p;
@@ -120,6 +122,11 @@ namespace pipeline_inspection
     p.line_gradient = x[4];
     
     error = SSE(p, pointBuffer, calib);
+    
+    }catch(std::runtime_error e){
+      std::cout << "Catched nlopt exception" << std::endl;
+    }
+    
     
     return p;
   } 
